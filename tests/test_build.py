@@ -29,6 +29,7 @@ from build import (
     build_snippets,
     build_workflow_items,
     load_catalog,
+    load_legacy_aliases,
     write_archive,
     write_workflow_archive,
 )
@@ -140,6 +141,7 @@ def test_workflow_alias_count_variants_change_only_visible_alternatives() -> Non
     assert zero_aliases["subtitle"] == ""
     assert two_aliases["subtitle"] == ":hotel_bell: · :bellhop_bell:"
     assert zero_aliases["match"] == two_aliases["match"]
+    assert zero_aliases["uid"] == two_aliases["uid"]
 
 
 def test_compatibility_snippets_include_accepted_legacy_aliases_only() -> None:
@@ -231,7 +233,13 @@ def test_workflow_archive_contains_browser_and_snippet_installer(tmp_path: Path)
 def test_vendored_catalog_is_unicode_18_and_has_unique_triggers() -> None:
     catalog = load_catalog(ROOT / "data" / "emoji.json")
     snippets = build_snippets(catalog)
+    compatibility_snippets = build_compatibility_snippets(
+        catalog, load_legacy_aliases(ROOT / "data" / "legacy_aliases.json")
+    )
     triggers = [snippet["alfredsnippet"]["keyword"] for snippet in snippets]
+    compatibility_triggers = [
+        snippet["alfredsnippet"]["keyword"] for snippet in compatibility_snippets
+    ]
     bellhop_triggers = {
         snippet["alfredsnippet"]["keyword"]
         for snippet in snippets
@@ -242,6 +250,9 @@ def test_vendored_catalog_is_unicode_18_and_has_unique_triggers() -> None:
     assert catalog["skin_tone_variants_included"] is False
     assert len(snippets) == catalog["emoji_count"]
     assert len(triggers) == len(set(triggers))
+    assert len(compatibility_triggers) == len(set(compatibility_triggers))
+    assert set(triggers).isdisjoint(compatibility_triggers)
+    assert compatibility_snippets
     assert bellhop_triggers == {":bellhop:"}
     assert (
         next(entry["primary_alias"] for entry in catalog["emojis"] if entry["emoji"] == "☔")

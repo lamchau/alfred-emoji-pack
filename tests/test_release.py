@@ -5,6 +5,7 @@ from pathlib import Path
 
 import pytest
 from release import (
+    ARTIFACT_PATHS,
     project_version,
     release_arguments,
     remote_tag_commit,
@@ -38,6 +39,14 @@ def test_release_state_requires_clean_pushed_commit(tmp_path: Path) -> None:
 
     with pytest.raises(ValueError, match="not pushed"):
         validate_release_state("", "abc", "def", [artifact])
+
+
+def test_release_includes_all_generated_packages() -> None:
+    assert [path.name for path in ARTIFACT_PATHS] == [
+        "Emoji Pack.alfredworkflow",
+        "Emoji Pack.alfredsnippets",
+        "Emoji Aliases.alfredsnippets",
+    ]
 
 
 def test_release_state_requires_built_archive(tmp_path: Path) -> None:
