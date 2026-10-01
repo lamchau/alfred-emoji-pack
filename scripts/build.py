@@ -9,20 +9,31 @@ import zipfile
 from pathlib import Path
 from typing import Any
 
+from emoji_data import normalize_legacy_alias
+
 ROOT = Path(__file__).resolve().parent.parent
 CATALOG_PATH = ROOT / "data" / "emoji.json"
+LEGACY_ALIASES_PATH = ROOT / "data" / "legacy_aliases.json"
 ICON_PATH = ROOT / "assets" / "icon.png"
 PROJECT_PATH = ROOT / "pyproject.toml"
 DIST_PATH = ROOT / "dist"
 SNIPPET_OUTPUT_PATH = DIST_PATH / "Emoji Pack.alfredsnippets"
+COMPATIBILITY_OUTPUT_PATH = DIST_PATH / "Emoji Aliases.alfredsnippets"
 WORKFLOW_OUTPUT_PATH = DIST_PATH / "Emoji Pack.alfredworkflow"
 UID_NAMESPACE = uuid.UUID("56f99baa-f412-54d0-a3ac-77bb3d94af21")
 ZIP_TIMESTAMP = (2026, 1, 1, 0, 0, 0)
 MAX_ALTERNATIVE_ALIASES = 3
+MAX_CONFIGURABLE_ALIASES = 5
 SCRIPT_FILTER_UID = "D1120E91-53C1-5142-A5FE-D72D1169240A"
 CLIPBOARD_UID = "D328392E-D1D8-5A75-8F6E-E93FC6FBC2C0"
+COPY_CLIPBOARD_UID = "421A4BF8-2354-58C9-9254-D5E538CB8742"
 INSTALL_KEYWORD_UID = "6B9A1630-9EBF-55AE-B292-4CB57F6C655A"
 INSTALL_ACTION_UID = "AC983391-67E8-5BC2-BA9C-C7B2F3F71FF6"
+REFRESH_KEYWORD_UID = "A84DA05A-C425-55E0-8D14-3D6364D9AE67"
+ALIASES_KEYWORD_UID = "1F40BB79-8CDD-51B6-9A49-B17733C46C62"
+ALIASES_ACTION_UID = "5D897E58-D220-5283-BA6F-98526474AA3F"
+COMMAND_MODIFIER = 1_048_576
+OPTION_MODIFIER = 524_288
 
 
 def load_catalog(path: Path) -> dict[str, Any]:
@@ -32,13 +43,25 @@ def load_catalog(path: Path) -> dict[str, Any]:
     return payload
 
 
+def load_legacy_aliases(path: Path) -> dict[str, list[str]]:
+    payload: Any = json.loads(path.read_text(encoding="utf-8"))
+    aliases = payload.get("aliases") if isinstance(payload, dict) else None
+    if not isinstance(aliases, dict):
+        raise ValueError(f"{path} does not contain an aliases object")
+    return {
+        str(emoji): [str(alias) for alias in values if isinstance(alias, str)]
+        for emoji, values in aliases.items()
+        if isinstance(values, list)
+    }
+
+
 def snippet_name(entry: dict[str, Any]) -> str:
     emoji = str(entry["emoji"])
     primary_alias = str(entry["primary_alias"])
     return f"{emoji} - :{primary_alias}:"
 
 
-def alternative_aliases(entry: dict[str, Any]) -> list[str]:
+def alternative_aliases(entry: dict[str, Any], maximum: int = MAX_ALTERNATIVE_ALIASES) -> list[str]:
     primary_alias = str(entry["primary_alias"])
     aliases = [
         str(alias)
@@ -46,7 +69,7 @@ def alternative_aliases(entry: dict[str, Any]) -> list[str]:
         if str(alias) and str(alias) != primary_alias
     ]
     aliases.sort(key=lambda alias: (len(alias), alias))
-    return aliases[:MAX_ALTERNATIVE_ALIASES]
+    return aliases[:maximum]
 
 
 def workflow_match_text(entry: dict[str, Any]) -> str:
@@ -66,7 +89,30 @@ def workflow_match_text(entry: dict[str, Any]) -> str:
     return " ".join(sorted(terms))
 
 
-def build_workflow_items(catalog: dict[str, Any]) -> dict[str, list[dict[str, Any]]]:
+def build_category_items(catalog: dict[str, Any]) -> list[dict[str, Any]]:
+    counts: dict[str, int] = {}
+    for entry in catalog["emojis"]:
+        if not isinstance(entry, dict):
+            raise ValueError("emoji catalog entries must be objects")
+        group = str(entry["group"])
+        counts[group] = counts.get(group, 0) + 1
+
+    return [
+        {
+            "autocomplete": group,
+            "match": f"{group} category browse",
+            "subtitle": f"Browse {count} emoji · press Tab to filter",
+            "title": group,
+            "uid": str(uuid.uuid5(UID_NAMESPACE, f"workflow-group|{group}")),
+            "valid": False,
+        }
+        for group, count in counts.items()
+    ]
+
+
+def build_workflow_items(
+    catalog: dict[str, Any], maximum_alternative_aliases: int = MAX_ALTERNATIVE_ALIASES
+) -> dict[str, list[dict[str, Any]]]:
     items: list[dict[str, Any]] = []
     for raw_entry in catalog["emojis"]:
         if not isinstance(raw_entry, dict):
@@ -74,19 +120,32 @@ def build_workflow_items(catalog: dict[str, Any]) -> dict[str, list[dict[str, An
         emoji = str(raw_entry["emoji"])
         name = str(raw_entry["name"])
         primary_alias = str(raw_entry["primary_alias"])
-        aliases = alternative_aliases(raw_entry)
+        trigger = f":{primary_alias}:"
+        aliases = alternative_aliases(raw_entry, maximum_alternative_aliases)
         items.append(
             {
                 "arg": emoji,
-                "autocomplete": f":{primary_alias}:",
+                "autocomplete": trigger,
                 "match": workflow_match_text(raw_entry),
+                "mods": {
+                    "alt": {
+                        "arg": trigger,
+                        "subtitle": f"Copy {trigger}",
+                        "valid": True,
+                    },
+                    "cmd": {
+                        "arg": emoji,
+                        "subtitle": f"Copy {emoji}",
+                        "valid": True,
+                    },
+                },
                 "subtitle": " · ".join(f":{alias}:" for alias in aliases),
                 "text": {"copy": emoji, "largetype": f"{emoji} {name}"},
-                "title": f"{emoji} - :{primary_alias}:",
+                "title": f"{emoji} - {trigger}",
                 "uid": str(uuid.uuid5(UID_NAMESPACE, f"workflow|{emoji}")),
             }
         )
-    return {"items": items}
+    return {"items": [*build_category_items(catalog), *items]}
 
 
 def build_snippets(catalog: dict[str, Any]) -> list[dict[str, dict[str, str]]]:
@@ -129,6 +188,53 @@ def build_snippets(catalog: dict[str, Any]) -> list[dict[str, dict[str, str]]]:
     )
 
 
+def build_compatibility_snippets(
+    catalog: dict[str, Any], legacy_aliases: dict[str, list[str]]
+) -> list[dict[str, dict[str, str]]]:
+    snippets: list[dict[str, dict[str, str]]] = []
+    trigger_owners: dict[str, str] = {}
+
+    for raw_entry in catalog["emojis"]:
+        if not isinstance(raw_entry, dict):
+            raise ValueError("emoji catalog entries must be objects")
+        emoji = str(raw_entry["emoji"])
+        primary_alias = str(raw_entry["primary_alias"])
+        accepted_aliases = {str(alias) for alias in raw_entry.get("aliases", [])}
+        legacy_values = legacy_aliases.get(
+            emoji, legacy_aliases.get(emoji.replace("\ufe0f", ""), [])
+        )
+        aliases = {
+            alias
+            for value in legacy_values
+            if (alias := normalize_legacy_alias(value)) in accepted_aliases
+            and alias != primary_alias
+        }
+        for alias in aliases:
+            trigger = f":{alias}:"
+            existing_owner = trigger_owners.setdefault(trigger, emoji)
+            if existing_owner != emoji:
+                raise ValueError(f"compatibility trigger {trigger} belongs to multiple emoji")
+            uid = str(uuid.uuid5(UID_NAMESPACE, f"{emoji}|{trigger}"))
+            snippets.append(
+                {
+                    "alfredsnippet": {
+                        "keyword": trigger,
+                        "name": f"{emoji} - {trigger} - alias for :{primary_alias}:",
+                        "snippet": emoji,
+                        "uid": uid,
+                    }
+                }
+            )
+
+    return sorted(
+        snippets,
+        key=lambda snippet: (
+            snippet["alfredsnippet"]["keyword"],
+            snippet["alfredsnippet"]["snippet"],
+        ),
+    )
+
+
 def write_archive(
     snippets: list[dict[str, dict[str, str]]], icon_path: Path, output_path: Path
 ) -> None:
@@ -160,11 +266,39 @@ def workflow_plist(version: str) -> dict[str, Any]:
                     "modifiers": 0,
                     "modifiersubtext": "",
                     "vitoclose": False,
-                }
+                },
+                {
+                    "destinationuid": COPY_CLIPBOARD_UID,
+                    "modifiers": COMMAND_MODIFIER,
+                    "modifiersubtext": "Copy emoji",
+                    "vitoclose": False,
+                },
+                {
+                    "destinationuid": COPY_CLIPBOARD_UID,
+                    "modifiers": OPTION_MODIFIER,
+                    "modifiersubtext": "Copy preferred trigger",
+                    "vitoclose": False,
+                },
             ],
             INSTALL_KEYWORD_UID: [
                 {
                     "destinationuid": INSTALL_ACTION_UID,
+                    "modifiers": 0,
+                    "modifiersubtext": "",
+                    "vitoclose": False,
+                }
+            ],
+            REFRESH_KEYWORD_UID: [
+                {
+                    "destinationuid": INSTALL_ACTION_UID,
+                    "modifiers": 0,
+                    "modifiersubtext": "",
+                    "vitoclose": False,
+                }
+            ],
+            ALIASES_KEYWORD_UID: [
+                {
+                    "destinationuid": ALIASES_ACTION_UID,
                     "modifiers": 0,
                     "modifiersubtext": "",
                     "vitoclose": False,
@@ -184,13 +318,13 @@ def workflow_plist(version: str) -> dict[str, Any]:
                     "argumenttrimmode": 0,
                     "argumenttype": 1,
                     "escaping": 102,
-                    "keyword": "emoji",
+                    "keyword": "{var:emoji_keyword}",
                     "queuedelaycustom": 1,
                     "queuedelayimmediatelyinitially": True,
                     "queuedelaymode": 0,
                     "queuemode": 1,
                     "runningsubtext": "Loading emoji...",
-                    "script": "/bin/cat workflow-items.json",
+                    "script": '/bin/cat "workflow-items-{var:emoji_alias_count}.json"',
                     "scriptargtype": 0,
                     "scriptfile": "",
                     "subtext": "Search names, aliases, and descriptive keywords",
@@ -200,6 +334,17 @@ def workflow_plist(version: str) -> dict[str, Any]:
                 },
                 "type": "alfred.workflow.input.scriptfilter",
                 "uid": SCRIPT_FILTER_UID,
+                "version": 3,
+            },
+            {
+                "config": {
+                    "autopaste": False,
+                    "clipboardtext": "{query}",
+                    "ignoredynamicplaceholders": False,
+                    "transient": False,
+                },
+                "type": "alfred.workflow.output.clipboard",
+                "uid": COPY_CLIPBOARD_UID,
                 "version": 3,
             },
             {
@@ -217,12 +362,24 @@ def workflow_plist(version: str) -> dict[str, Any]:
                 "config": {
                     "argumenttype": 2,
                     "keyword": "emoji-install",
-                    "subtext": "Import colon triggers into Alfred Snippets",
+                    "subtext": "Import preferred colon triggers into Alfred Snippets",
                     "text": "Install Emoji Expansion",
                     "withspace": False,
                 },
                 "type": "alfred.workflow.input.keyword",
                 "uid": INSTALL_KEYWORD_UID,
+                "version": 1,
+            },
+            {
+                "config": {
+                    "argumenttype": 2,
+                    "keyword": "emoji-refresh",
+                    "subtext": "Reimport the current preferred trigger collection",
+                    "text": "Refresh Emoji Expansion",
+                    "withspace": False,
+                },
+                "type": "alfred.workflow.input.keyword",
+                "uid": REFRESH_KEYWORD_UID,
                 "version": 1,
             },
             {
@@ -238,37 +395,102 @@ def workflow_plist(version: str) -> dict[str, Any]:
                 "uid": INSTALL_ACTION_UID,
                 "version": 2,
             },
+            {
+                "config": {
+                    "argumenttype": 2,
+                    "keyword": "emoji-install-aliases",
+                    "subtext": "Optional legacy triggers create duplicate snippet results",
+                    "text": "Install Legacy Emoji Aliases",
+                    "withspace": False,
+                },
+                "type": "alfred.workflow.input.keyword",
+                "uid": ALIASES_KEYWORD_UID,
+                "version": 1,
+            },
+            {
+                "config": {
+                    "concurrently": False,
+                    "escaping": 0,
+                    "script": '/usr/bin/open "Emoji Aliases.alfredsnippets"',
+                    "scriptargtype": 0,
+                    "scriptfile": "",
+                    "type": 0,
+                },
+                "type": "alfred.workflow.action.script",
+                "uid": ALIASES_ACTION_UID,
+                "version": 2,
+            },
         ],
         "readme": (
             "Type “emoji” followed by a query to browse and paste emoji.\n\n"
-            "Run “emoji-install” once to import the bundled colon-trigger snippets."
+            "Run “emoji-install” once to import preferred colon triggers. "
+            "Use “emoji-refresh” after updates, or “emoji-install-aliases” "
+            "for optional legacy expansion triggers."
         ),
         "uidata": {
             SCRIPT_FILTER_UID: {"xpos": 30, "ypos": 30},
             CLIPBOARD_UID: {"xpos": 300, "ypos": 30},
+            COPY_CLIPBOARD_UID: {"xpos": 300, "ypos": 105},
             INSTALL_KEYWORD_UID: {"xpos": 30, "ypos": 180},
             INSTALL_ACTION_UID: {"xpos": 300, "ypos": 180},
+            REFRESH_KEYWORD_UID: {"xpos": 30, "ypos": 255},
+            ALIASES_KEYWORD_UID: {"xpos": 30, "ypos": 330},
+            ALIASES_ACTION_UID: {"xpos": 300, "ypos": 330},
         },
+        "userconfigurationconfig": [
+            {
+                "config": {
+                    "default": "emoji",
+                    "placeholder": "emoji",
+                    "required": True,
+                    "trim": True,
+                },
+                "description": "Keyword used to open the emoji browser.",
+                "label": "Search keyword",
+                "type": "textfield",
+                "variable": "emoji_keyword",
+            },
+            {
+                "config": {
+                    "default": str(MAX_ALTERNATIVE_ALIASES),
+                    "pairs": [
+                        [str(count), str(count)] for count in range(MAX_CONFIGURABLE_ALIASES + 1)
+                    ],
+                },
+                "description": "Number of alternate aliases shown below each result.",
+                "label": "Displayed alternate aliases",
+                "type": "popupbutton",
+                "variable": "emoji_alias_count",
+            },
+        ],
+        "variablesdontexport": [],
         "version": version,
         "webaddress": "https://github.com/lamchau/alfred-emoji-pack",
     }
 
 
 def write_workflow_archive(
-    workflow_items: dict[str, list[dict[str, Any]]],
+    workflow_item_variants: dict[int, dict[str, list[dict[str, Any]]]],
     snippet_path: Path,
+    compatibility_path: Path,
     icon_path: Path,
     output_path: Path,
     version: str,
 ) -> None:
     entries = {
+        "Emoji Aliases.alfredsnippets": compatibility_path.read_bytes(),
         "Emoji Pack.alfredsnippets": snippet_path.read_bytes(),
         "icon.png": icon_path.read_bytes(),
         "info.plist": plistlib.dumps(workflow_plist(version), sort_keys=False),
-        "workflow-items.json": (
-            json.dumps(workflow_items, ensure_ascii=False, indent=2, sort_keys=True) + "\n"
-        ).encode(),
     }
+    entries.update(
+        {
+            f"workflow-items-{count}.json": (
+                json.dumps(items, ensure_ascii=False, indent=2, sort_keys=True) + "\n"
+            ).encode()
+            for count, items in workflow_item_variants.items()
+        }
+    )
     with zipfile.ZipFile(output_path, "w", compression=zipfile.ZIP_DEFLATED) as archive:
         for filename, content in entries.items():
             info = zipfile.ZipInfo(filename, ZIP_TIMESTAMP)
@@ -289,24 +511,35 @@ def run(
     catalog_path: Path,
     icon_path: Path,
     project_path: Path,
+    legacy_aliases_path: Path,
     snippet_output_path: Path,
+    compatibility_output_path: Path,
     workflow_output_path: Path,
 ) -> None:
     catalog = load_catalog(catalog_path)
     snippets = build_snippets(catalog)
+    compatibility_snippets = build_compatibility_snippets(
+        catalog, load_legacy_aliases(legacy_aliases_path)
+    )
     snippet_output_path.parent.mkdir(parents=True, exist_ok=True)
-    workflow_output_path.parent.mkdir(parents=True, exist_ok=True)
     write_archive(snippets, icon_path, snippet_output_path)
+    write_archive(compatibility_snippets, icon_path, compatibility_output_path)
     write_workflow_archive(
-        build_workflow_items(catalog),
+        {
+            count: build_workflow_items(catalog, count)
+            for count in range(MAX_CONFIGURABLE_ALIASES + 1)
+        },
         snippet_output_path,
+        compatibility_output_path,
         icon_path,
         workflow_output_path,
         project_version(project_path),
     )
     print(
-        f"Built {snippet_output_path.name} and {workflow_output_path.name}: "
-        f"{len(snippets)} emoji (Unicode Emoji {catalog['unicode_emoji_version']})"
+        f"Built {workflow_output_path.name}, {snippet_output_path.name}, and "
+        f"{compatibility_output_path.name}: {len(snippets)} emoji and "
+        f"{len(compatibility_snippets)} legacy aliases "
+        f"(Unicode Emoji {catalog['unicode_emoji_version']})"
     )
 
 
@@ -316,7 +549,9 @@ def main() -> None:
             CATALOG_PATH,
             ICON_PATH,
             PROJECT_PATH,
+            LEGACY_ALIASES_PATH,
             SNIPPET_OUTPUT_PATH,
+            COMPATIBILITY_OUTPUT_PATH,
             WORKFLOW_OUTPUT_PATH,
         )
     except (OSError, ValueError, KeyError, json.JSONDecodeError, tomllib.TOMLDecodeError) as error:

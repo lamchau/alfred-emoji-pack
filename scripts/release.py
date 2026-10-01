@@ -15,6 +15,7 @@ CATALOG_PATH = ROOT / "data" / "emoji.json"
 ARTIFACT_PATHS = [
     ROOT / "dist" / "Emoji Pack.alfredworkflow",
     ROOT / "dist" / "Emoji Pack.alfredsnippets",
+    ROOT / "dist" / "Emoji Aliases.alfredsnippets",
 ]
 SEMANTIC_VERSION = re.compile(r"^\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?$")
 
