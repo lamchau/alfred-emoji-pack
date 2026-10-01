@@ -8,14 +8,24 @@ from pathlib import Path
 from typing import Any
 
 from build import (
+    ALIASES_ACTION_UID,
+    ALIASES_KEYWORD_UID,
     CLIPBOARD_UID,
+    COMMAND_MODIFIER,
+    COMPATIBILITY_OUTPUT_PATH,
+    COPY_CLIPBOARD_UID,
     DIST_PATH,
     INSTALL_ACTION_UID,
     INSTALL_KEYWORD_UID,
+    MAX_CONFIGURABLE_ALIASES,
+    OPTION_MODIFIER,
+    REFRESH_KEYWORD_UID,
     SCRIPT_FILTER_UID,
     SNIPPET_OUTPUT_PATH,
     WORKFLOW_OUTPUT_PATH,
     alternative_aliases,
+    build_category_items,
+    build_compatibility_snippets,
     build_snippets,
     build_workflow_items,
     load_catalog,
@@ -34,10 +44,13 @@ def sample_catalog() -> dict[str, Any]:
         "emojis": [
             {
                 "emoji": "🛎️",
+                "group": "Objects",
                 "name": "bellhop bell",
                 "keywords": ["bellhop", "hotel", "service"],
                 "primary_alias": "bellhop",
                 "aliases": ["bellhop_bell", "bellhop"],
+                "subgroup": "hotel",
+                "unicode_name": "bellhop bell",
             }
         ],
     }
@@ -56,6 +69,7 @@ def test_default_packages_are_built_under_ignored_dist_directory() -> None:
 
     assert DIST_PATH == ROOT / "dist"
     assert SNIPPET_OUTPUT_PATH.parent == DIST_PATH
+    assert COMPATIBILITY_OUTPUT_PATH.parent == DIST_PATH
     assert WORKFLOW_OUTPUT_PATH.parent == DIST_PATH
     assert "dist/" in ignored_paths
 
@@ -78,7 +92,7 @@ def test_workflow_items_search_every_term_but_show_three_aliases() -> None:
     entry = catalog["emojis"][0]
     entry["aliases"] = ["bellhop", "bellhop_bell", "service_bell", "hotel_bell"]
 
-    item = build_workflow_items(catalog)["items"][0]
+    item = next(item for item in build_workflow_items(catalog)["items"] if item.get("arg"))
 
     assert item["title"] == "🛎️ - :bellhop:"
     assert item["subtitle"] == ":hotel_bell: · :bellhop_bell: · :service_bell:"
@@ -86,6 +100,59 @@ def test_workflow_items_search_every_term_but_show_three_aliases() -> None:
     assert item["autocomplete"] == ":bellhop:"
     assert "bellhop_bell" in item["match"]
     assert "service" in item["match"]
+    assert item["mods"] == {
+        "alt": {
+            "arg": ":bellhop:",
+            "subtitle": "Copy :bellhop:",
+            "valid": True,
+        },
+        "cmd": {"arg": "🛎️", "subtitle": "Copy 🛎️", "valid": True},
+    }
+
+
+def test_workflow_categories_filter_the_static_catalog() -> None:
+    categories = build_category_items(sample_catalog())
+
+    assert categories == [
+        {
+            "autocomplete": "Objects",
+            "match": "Objects category browse",
+            "subtitle": "Browse 1 emoji · press Tab to filter",
+            "title": "Objects",
+            "uid": categories[0]["uid"],
+            "valid": False,
+        }
+    ]
+
+
+def test_workflow_alias_count_variants_change_only_visible_alternatives() -> None:
+    catalog = sample_catalog()
+    entry = catalog["emojis"][0]
+    entry["aliases"] = ["bellhop", "bellhop_bell", "service_bell", "hotel_bell"]
+
+    zero_aliases = next(
+        item for item in build_workflow_items(catalog, 0)["items"] if item.get("arg")
+    )
+    two_aliases = next(
+        item for item in build_workflow_items(catalog, 2)["items"] if item.get("arg")
+    )
+
+    assert zero_aliases["subtitle"] == ""
+    assert two_aliases["subtitle"] == ":hotel_bell: · :bellhop_bell:"
+    assert zero_aliases["match"] == two_aliases["match"]
+
+
+def test_compatibility_snippets_include_accepted_legacy_aliases_only() -> None:
+    catalog = sample_catalog()
+    catalog["emojis"][0]["aliases"] = ["bellhop", "bellhop_bell", "hotel_bell"]
+
+    snippets = build_compatibility_snippets(
+        catalog,
+        {"🛎️": [":bellhop:", ":bellhop_bell:", ":unknown:"]},
+    )
+
+    assert [snippet["alfredsnippet"]["keyword"] for snippet in snippets] == [":bellhop_bell:"]
+    assert snippets[0]["alfredsnippet"]["name"].endswith("alias for :bellhop:")
 
 
 def test_archive_contains_importable_snippet_json_and_icon(tmp_path: Path) -> None:
@@ -108,29 +175,57 @@ def test_workflow_archive_contains_browser_and_snippet_installer(tmp_path: Path)
     icon.write_bytes(b"png")
     snippets = tmp_path / "Emoji Pack.alfredsnippets"
     snippets.write_bytes(b"snippets")
+    compatibility = tmp_path / "Emoji Aliases.alfredsnippets"
+    compatibility.write_bytes(b"aliases")
     output = tmp_path / "Emoji Pack.alfredworkflow"
-    items = build_workflow_items(sample_catalog())
+    item_variants = {
+        count: build_workflow_items(sample_catalog(), count)
+        for count in range(MAX_CONFIGURABLE_ALIASES + 1)
+    }
 
-    write_workflow_archive(items, snippets, icon, output, "2.0.0")
+    write_workflow_archive(
+        item_variants,
+        snippets,
+        compatibility,
+        icon,
+        output,
+        "2.0.0",
+    )
 
     with zipfile.ZipFile(output) as archive:
         assert set(archive.namelist()) == {
+            "Emoji Aliases.alfredsnippets",
             "Emoji Pack.alfredsnippets",
             "icon.png",
             "info.plist",
-            "workflow-items.json",
+            *{f"workflow-items-{count}.json" for count in range(MAX_CONFIGURABLE_ALIASES + 1)},
         }
         assert archive.read("Emoji Pack.alfredsnippets") == b"snippets"
-        assert json.loads(archive.read("workflow-items.json")) == items
+        assert archive.read("Emoji Aliases.alfredsnippets") == b"aliases"
+        assert json.loads(archive.read("workflow-items-3.json")) == item_variants[3]
         workflow = plistlib.loads(archive.read("info.plist"))
 
     objects = {item["uid"]: item for item in workflow["objects"]}
     assert objects[SCRIPT_FILTER_UID]["config"]["alfredfiltersresults"] is True
+    assert objects[SCRIPT_FILTER_UID]["config"]["keyword"] == "{var:emoji_keyword}"
+    assert "{var:emoji_alias_count}" in objects[SCRIPT_FILTER_UID]["config"]["script"]
     assert objects[CLIPBOARD_UID]["config"]["autopaste"] is True
+    assert objects[COPY_CLIPBOARD_UID]["config"]["autopaste"] is False
     assert objects[INSTALL_KEYWORD_UID]["config"]["keyword"] == "emoji-install"
+    assert objects[REFRESH_KEYWORD_UID]["config"]["keyword"] == "emoji-refresh"
+    assert objects[ALIASES_KEYWORD_UID]["config"]["keyword"] == "emoji-install-aliases"
     assert "Emoji Pack.alfredsnippets" in objects[INSTALL_ACTION_UID]["config"]["script"]
+    assert "Emoji Aliases.alfredsnippets" in objects[ALIASES_ACTION_UID]["config"]["script"]
     assert workflow["connections"][SCRIPT_FILTER_UID][0]["destinationuid"] == CLIPBOARD_UID
+    assert {
+        connection["modifiers"] for connection in workflow["connections"][SCRIPT_FILTER_UID]
+    } == {0, COMMAND_MODIFIER, OPTION_MODIFIER}
     assert workflow["connections"][INSTALL_KEYWORD_UID][0]["destinationuid"] == INSTALL_ACTION_UID
+    assert workflow["connections"][REFRESH_KEYWORD_UID][0]["destinationuid"] == INSTALL_ACTION_UID
+    assert workflow["connections"][ALIASES_KEYWORD_UID][0]["destinationuid"] == ALIASES_ACTION_UID
+    configuration = {item["variable"]: item for item in workflow["userconfigurationconfig"]}
+    assert configuration["emoji_keyword"]["config"]["default"] == "emoji"
+    assert configuration["emoji_alias_count"]["config"]["default"] == "3"
 
 
 def test_vendored_catalog_is_unicode_18_and_has_unique_triggers() -> None:
