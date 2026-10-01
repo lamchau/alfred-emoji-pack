@@ -4,7 +4,7 @@
 
 1. Run `just check`.
 2. Run `just build`.
-3. Confirm both generated packages exist under `dist/`.
+3. Confirm all 3 generated packages exist under `dist/`.
 4. Run `actionlint .github/workflows/*.yml`.
 5. Run `just alias-report` and review preferred overrides and shared search terms.
 
@@ -15,7 +15,12 @@
 3. Search for `hotel`, `service`, and `sound`.
 4. Confirm result subtitles omit the primary alias and show at most 3 alternatives.
 5. Press Return on a result and confirm Alfred pastes the emoji.
-6. Run `emoji-install` and confirm Alfred opens the bundled snippet collection.
+6. Confirm Command-Return copies the emoji without pasting.
+7. Confirm Option-Return copies the preferred colon trigger.
+8. Press Tab on a category row and confirm the list filters to that group.
+9. Change the keyword and alias count in workflow configuration.
+10. Select several emoji repeatedly, reopen an empty search, and confirm Alfred learns the order.
+11. Run `emoji-install` and confirm Alfred opens the bundled snippet collection.
 
 ## Alfred 5 snippets
 
@@ -24,7 +29,10 @@
 3. Confirm the collection icon appears.
 4. Expand `:bell:`, `:bellhop:`, `:joy:`, `:+1:`, `:-1:`, and `:umbrella_rain:`.
 5. Confirm each emoji appears once.
-6. Export the imported collection and inspect the ZIP if Alfred changes its export format.
+6. Run `emoji-refresh` and approve the preferred-trigger reimport.
+7. Run `emoji-install-aliases` and approve the optional legacy collection.
+8. Confirm a legacy alias expands and duplicate browser rows are expected.
+9. Export the imported collection and inspect the ZIP if Alfred changes its export format.
 
 The generated archive uses the flat JSON snippet layout already accepted by
 Alfred, plus `icon.png`. Do not add collection metadata unless an Alfred 5
@@ -33,7 +41,7 @@ import or export test shows that it is required.
 ## Publication
 
 1. Set the version in `pyproject.toml`.
-2. Rebuild and commit both packages.
+2. Rebuild all packages.
 3. Push the release commit.
 4. Run `just release`.
 5. Download the release assets and verify `SHA256SUMS`.

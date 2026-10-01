@@ -12,8 +12,12 @@ both generated from the same catalog.
 |---|---|
 | Alfred browser | Search names, aliases, and CLDR keywords with `emoji <query>` |
 | Direct paste | Press Return to paste the selected emoji into the active application |
+| Copy actions | Command-Return copies the emoji; Option-Return copies its preferred trigger |
 | Text expansion | Type a preferred colon trigger such as `:bellhop:` |
-| Alias display | Show the preferred trigger in the title and up to 3 alternatives below it |
+| Alias display | Show the preferred trigger in the title and configured alternatives below it |
+| Learned ranking | Let Alfred promote frequently and recently selected emoji |
+| Category browsing | Press Tab on a Unicode group row to filter the catalog |
+| Workflow settings | Configure the search keyword and show 0–5 alternate aliases |
 | Current data | Build from official Unicode Emoji and English CLDR data |
 | Default tones | Omit skin-tone sequences unless enabled in configuration |
 | Offline use | Require no Python, Node.js, JavaScript, or network access after installation |
@@ -41,6 +45,9 @@ triggers.
 Download and open `Emoji Pack.alfredsnippets` if you only want colon-trigger
 expansion.
 
+`Emoji Aliases.alfredsnippets` is optional. It adds accepted legacy expansion
+triggers and creates duplicate rows in Alfred's snippet browser.
+
 ## Use
 
 Type `emoji` followed by a search term:
@@ -60,6 +67,16 @@ expansions as the subtitle:
 Press Return to paste the emoji. Alfred searches the full Unicode name, CLDR
 name, aliases, keywords, group, and subgroup even though the result only shows
 3 alternate aliases.
+
+Hold Command while pressing Return to copy the emoji without pasting it. Hold
+Option while pressing Return to copy the preferred colon trigger.
+
+The first rows represent Unicode groups such as Smileys & Emotion, Food & Drink,
+and Travel & Places. Press Tab on a group to filter the same result list.
+
+Alfred learns from the stable ID attached to every emoji. Open the browser
+without a query to see frequently and recently selected emoji rise in the
+results. There is no separate favorites database to maintain.
 
 The imported snippet collection handles expansion in any application:
 
@@ -84,6 +101,20 @@ just alias-report
 ```
 
 Alias requests can be submitted with the repository issue form.
+
+Run `emoji-install-aliases` to import the optional legacy aliases. Run
+`emoji-refresh` after installing an updated workflow to reopen the current
+preferred-trigger collection.
+
+## Workflow settings
+
+Open Alfred's workflow configuration to change:
+
+- the browser keyword, which defaults to `emoji`
+- the number of alternate aliases shown below each result, from 0 through 5
+
+The workflow contains a pre-generated result file for each alias-count setting,
+so changing this option adds no runtime dependency.
 
 ## Emoji data
 
@@ -142,7 +173,7 @@ The default `just` recipe lists the available commands.
 
 | Recipe | Purpose |
 |---|---|
-| `just build` | Build both Alfred packages from vendored data |
+| `just build` | Build all Alfred packages from vendored data |
 | `just update` | Download current Unicode and CLDR data, then rebuild |
 | `just test` | Run the test suite |
 | `just check` | Check formatting, lint, types, and tests |
@@ -160,17 +191,18 @@ Generated packages are written to the ignored `dist/` directory:
 ```text
 dist/Emoji Pack.alfredworkflow
 dist/Emoji Pack.alfredsnippets
+dist/Emoji Aliases.alfredsnippets
 ```
 
 Release assets are generated from this directory and are not committed.
 
 ## Automation
 
-CI runs the locked checks on Python 3.12 and 3.14, rebuilds both packages, tests
+CI runs the locked checks on Python 3.12 and 3.14, rebuilds all packages, tests
 their ZIP structure, and rejects generated-file drift.
 
 A scheduled workflow runs on the 1st day of each month. It updates Unicode and
-CLDR data, rebuilds both packages, and opens or updates
+CLDR data, rebuilds all packages, and opens or updates
 `automation/update-emoji-data` when tracked outputs change. Repository settings
 must allow GitHub Actions to create pull requests.
 
@@ -190,6 +222,7 @@ tag, or an existing GitHub release. It publishes:
 
 - `Emoji Pack.alfredworkflow`
 - `Emoji Pack.alfredsnippets`
+- `Emoji Aliases.alfredsnippets`
 - `SHA256SUMS`
 - `release.json`
 
