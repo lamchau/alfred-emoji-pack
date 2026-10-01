@@ -47,6 +47,7 @@ jobs:
       - name: Rebuild packages
         run: |
           just build
+          unzip -t "dist/Emoji Aliases.alfredsnippets"
           unzip -t "dist/Emoji Pack.alfredsnippets"
           unzip -t "dist/Emoji Pack.alfredworkflow"
 

@@ -63,6 +63,7 @@ jobs:
       - name: Validate generated files
         run: |
           just check
+          unzip -t "dist/Emoji Aliases.alfredsnippets"
           unzip -t "dist/Emoji Pack.alfredsnippets"
           unzip -t "dist/Emoji Pack.alfredworkflow"
 
