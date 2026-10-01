@@ -1,0 +1,141 @@
+name: Update emoji data
+
+on:
+  schedule:
+    - cron: "17 9 1 * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: update-emoji-data
+  cancel-in-progress: false
+
+jobs:
+  update:
+    name: Update, build, and test
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: "3.14"
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@94527f2e458b27549849d47d273a16bec83a01e9 # v7
+        with:
+          enable-cache: true
+
+      - name: Set up just
+        uses: extractions/setup-just@f8a3cce218d9f83db3a2ecd90e41ac3de6cdfd9b # v3
+
+      - name: Prepare automation branch
+        env:
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+        run: |
+          set -euo pipefail
+          branch="automation/update-emoji-data"
+          git fetch origin "${DEFAULT_BRANCH}"
+          if git ls-remote --exit-code --heads origin "${branch}" >/dev/null 2>&1; then
+            git fetch origin "${branch}"
+            git switch --create "${branch}" --track "origin/${branch}"
+            git merge --no-edit "origin/${DEFAULT_BRANCH}"
+          else
+            git switch --create "${branch}"
+          fi
+
+      - name: Install development dependencies
+        run: uv sync --locked
+
+      - name: Update catalog and archive
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: just update
+
+      - name: Validate generated files
+        run: |
+          just check
+          unzip -t "dist/Emoji Pack.alfredsnippets"
+          unzip -t "dist/Emoji Pack.alfredworkflow"
+
+      - name: Commit and push changes
+        id: changes
+        env:
+          BRANCH: automation/update-emoji-data
+        run: |
+          set -euo pipefail
+          if git diff --quiet -- "data/emoji.json"; then
+            printf 'changed=false\n' >> "${GITHUB_OUTPUT}"
+            exit 0
+          fi
+
+          emoji_version="$(
+            python3 -c 'import json; print(json.load(open("data/emoji.json"))["unicode_emoji_version"])'
+          )"
+          emoji_count="$(
+            python3 -c 'import json; print(json.load(open("data/emoji.json"))["emoji_count"])'
+          )"
+          skin_tones="$(
+            python3 -c 'import json; print(str(json.load(open("data/emoji.json"))["skin_tone_variants_included"]).lower())'
+          )"
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add "data/emoji.json"
+          git commit -m "chore: update Unicode emoji data"
+          git push --set-upstream origin "${BRANCH}"
+
+          {
+            printf 'changed=true\n'
+            printf 'emoji_version=%s\n' "${emoji_version}"
+            printf 'emoji_count=%s\n' "${emoji_count}"
+            printf 'skin_tones=%s\n' "${skin_tones}"
+          } >> "${GITHUB_OUTPUT}"
+
+      - name: Open update pull request
+        if: steps.changes.outputs.changed == 'true'
+        env:
+          BRANCH: automation/update-emoji-data
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+          EMOJI_COUNT: ${{ steps.changes.outputs.emoji_count }}
+          EMOJI_VERSION: ${{ steps.changes.outputs.emoji_version }}
+          SKIN_TONES: ${{ steps.changes.outputs.skin_tones }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          existing_pr="$(
+            gh pr list \
+              --base "${DEFAULT_BRANCH}" \
+              --head "${BRANCH}" \
+              --state open \
+              --json number \
+              --jq '.[0].number // empty'
+          )"
+          if [[ -n "${existing_pr}" ]]; then
+            printf 'Updated existing pull request #%s\n' "${existing_pr}"
+            exit 0
+          fi
+
+          body_file="${RUNNER_TEMP}/emoji-update-pr.md"
+          cat > "${body_file}" <<EOF
+          Automated monthly Unicode emoji data refresh.
+
+          - Unicode Emoji ${EMOJI_VERSION}
+          - ${EMOJI_COUNT} fully qualified emoji
+          - Skin-tone variants included: ${SKIN_TONES}
+          - Rebuilt and validated both Alfred packages
+          EOF
+
+          gh pr create \
+            --base "${DEFAULT_BRANCH}" \
+            --head "${BRANCH}" \
+            --title "chore: update Unicode emoji data" \
+            --body-file "${body_file}"
