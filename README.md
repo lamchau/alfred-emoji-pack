@@ -43,7 +43,8 @@ emoji rain
 
 Search matches names, aliases, keywords, and Unicode categories — so `emoji
 smileys` or `emoji cat-face` narrows to a whole section. The subtitle shows a
-few alternate triggers, but every alias is searchable.
+few alternate triggers, but every alias is searchable. Emoji with no alternate
+trigger show their name instead, so no row is ever blank.
 
 Open `emoji` with no query to see what you use most. Alfred learns your picks
 automatically; there is no favorites list to maintain.
