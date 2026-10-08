@@ -84,6 +84,9 @@ def workflow_match_text(entry: dict[str, Any]) -> str:
     aliases = entry.get("aliases", [])
     if isinstance(aliases, list):
         terms.update(str(alias).replace("_", " ") for alias in aliases)
+        # the title and autocomplete both show :alias:, so searching for the
+        # trigger Alfred just offered has to match
+        terms.update(f":{alias}:" for alias in aliases if str(alias))
     return " ".join(sorted(terms))
 
 

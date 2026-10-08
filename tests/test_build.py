@@ -93,6 +93,16 @@ def test_alternative_aliases_exclude_primary_and_cap_visible_aliases() -> None:
     assert alternative_aliases(entry) == ["hotel_bell", "bellhop_bell", "service_bell"]
 
 
+def test_every_shown_trigger_is_searchable() -> None:
+    catalog = load_catalog(ROOT / "data" / "emoji.json")
+    items = build_workflow_items(catalog)["items"]
+
+    for item in items:
+        terms = item["match"].split()
+        # the title and autocomplete offer :alias:, so pasting it back must match
+        assert item["autocomplete"] in terms, item["title"]
+
+
 def test_workflow_items_search_every_term_but_show_three_aliases() -> None:
     catalog = sample_catalog()
     entry = catalog["emojis"][0]
