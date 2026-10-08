@@ -154,6 +154,11 @@ current automatically:
 Legacy trigger names are kept wherever they are still clear and unambiguous,
 so existing muscle memory keeps working.
 
+Because nothing of the original source survived the rewrite, this repository
+starts from a fresh commit history rather than the upstream one. It is a fork
+in lineage only — there is no shared git ancestry with
+[califa/alfred-emoji-pack](https://github.com/califa/alfred-emoji-pack).
+
 Code is [ISC licensed](LICENSE). Emoji data comes from the
 [Unicode emoji files](https://www.unicode.org/Public/emoji/latest/) and
 [CLDR](https://github.com/unicode-org/cldr), subject to the
