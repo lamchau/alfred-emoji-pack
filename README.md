@@ -4,8 +4,9 @@
 
 Find any emoji in Alfred, or type `:joy:` anywhere to get 😂.
 
-Built from official Unicode and CLDR data. No Python, Node, or network access
-needed once installed.
+Generated from official Unicode and CLDR releases and refreshed automatically
+each month, so new emoji show up without anyone editing a list. No Python,
+Node, or network access needed once installed.
 
 ## Install
 
@@ -137,9 +138,21 @@ development tools and pinned actions monthly.
 
 ## Credits
 
-Inspired by [Joel Califa's original Alfred Emoji Pack](https://github.com/califa/alfred-emoji-pack).
-The data pipeline, workflow, generator, tests, and automation were rewritten
-for Alfred 5; legacy trigger names are kept where they are still clear.
+Forked from Joel Califa's
+[Alfred Emoji Snippet Pack](https://joelcalifa.com/blog/alfred-emoji-snippet-pack/),
+which has not been updated since 2021 and predates Alfred 5.
+
+This version replaces the hand-maintained snippet list with a pipeline that
+generates everything from official Unicode and CLDR releases, and keeps it
+current automatically:
+
+- the catalog is regenerated from upstream data rather than edited by hand
+- a scheduled job refreshes it monthly and opens a pull request
+- builds are reproducible and verified in CI
+- the Alfred 5 workflow, tests, and release tooling were written from scratch
+
+Legacy trigger names are kept wherever they are still clear and unambiguous,
+so existing muscle memory keeps working.
 
 Code is [ISC licensed](LICENSE). Emoji data comes from the
 [Unicode emoji files](https://www.unicode.org/Public/emoji/latest/) and
