@@ -1,0 +1,37 @@
+name: Emoji trigger or alias request
+description: Request a clearer primary trigger or searchable alias
+title: "alias: "
+labels:
+  - alias
+body:
+  - type: markdown
+    attributes:
+      value: Check `just alias-report` before requesting a trigger already in the catalog.
+  - type: input
+    id: emoji
+    attributes:
+      label: Emoji
+      placeholder: "🛎️"
+    validations:
+      required: true
+  - type: input
+    id: current
+    attributes:
+      label: Current trigger
+      placeholder: ":bellhop:"
+    validations:
+      required: true
+  - type: input
+    id: requested
+    attributes:
+      label: Requested trigger or alias
+      placeholder: ":hotel_bell:"
+    validations:
+      required: true
+  - type: textarea
+    id: reason
+    attributes:
+      label: Reason
+      description: Explain why the requested term is clearer or more common.
+    validations:
+      required: true
