@@ -1,0 +1,35 @@
+[project]
+name = "alfred-emoji-pack"
+version = "3.0.0"
+description = "A Unicode emoji browser and snippet collection for Alfred 5"
+readme = "README.md"
+requires-python = ">=3.12"
+license = "ISC"
+license-files = ["LICENSE"]
+
+[project.urls]
+Homepage = "https://github.com/lamchau/alfred-emoji-pack"
+Issues = "https://github.com/lamchau/alfred-emoji-pack/issues"
+Releases = "https://github.com/lamchau/alfred-emoji-pack/releases"
+Repository = "https://github.com/lamchau/alfred-emoji-pack.git"
+
+[dependency-groups]
+dev = [
+    "mypy>=1.18.2",
+    "pytest>=8.4.2",
+    "ruff>=0.16.9",
+]
+
+[tool.pytest.ini_options]
+pythonpath = ["scripts"]
+testpaths = ["tests"]
+
+[tool.mypy]
+strict = true
+files = ["scripts", "tests"]
+
+[tool.ruff]
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM"]

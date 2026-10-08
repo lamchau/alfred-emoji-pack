@@ -1,0 +1,4 @@
+*.alfredsnippets binary
+*.alfredworkflow binary
+*.png binary
+data/*.json text diff eol=lf
