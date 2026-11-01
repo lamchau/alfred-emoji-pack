@@ -1,5 +1,5 @@
 {
-  "cldr_ref": "6198cae999ceb4847b25ddc0815835f07fced411",
+  "cldr_ref": "0c0d98c9d1fd2efaa2cb191a6bf2626d9d1e288b",
   "emoji_count": 1923,
   "emojis": [
     {
@@ -40508,13 +40508,13 @@
   "schema_version": 1,
   "skin_tone_variants_included": false,
   "source_sha256": {
-    "cldr_annotations": "514bc93ac647211d0f422f63978d1eeec6aa759d0cd8c3e8c5da6cf5a536784b",
+    "cldr_annotations": "14d0e9bb5003c085250df4ac7bd7ba1e26d92e74174d7a3a2f42dc16e07fb155",
     "cldr_annotations_derived": "a4a6c1a4c341d94179cb116623c5f44c47400a5bc55da483423ef7430ecf622e",
     "emoji_test": "8f3735cda1f92a779d78af67cf86066bb1f07143dc22f2ac29394d9bc57ab21a"
   },
   "sources": {
-    "cldr_annotations": "https://raw.githubusercontent.com/unicode-org/cldr/6198cae999ceb4847b25ddc0815835f07fced411/common/annotations/en.xml",
-    "cldr_annotations_derived": "https://raw.githubusercontent.com/unicode-org/cldr/6198cae999ceb4847b25ddc0815835f07fced411/common/annotationsDerived/en.xml",
+    "cldr_annotations": "https://raw.githubusercontent.com/unicode-org/cldr/0c0d98c9d1fd2efaa2cb191a6bf2626d9d1e288b/common/annotations/en.xml",
+    "cldr_annotations_derived": "https://raw.githubusercontent.com/unicode-org/cldr/0c0d98c9d1fd2efaa2cb191a6bf2626d9d1e288b/common/annotationsDerived/en.xml",
     "emoji_test": "https://www.unicode.org/Public/emoji/latest/emoji-test.txt"
   },
   "unicode_data_date": "2026-04-30, 22:40:18 GMT",
